@@ -77,8 +77,9 @@ Se não for possível identificar a empresa por nenhum dos dois métodos, não i
 ## Passo 8: Buscar Company e negócios abertos no HubSpot
 
 1. **Buscar a Company** pelo(s) domínio(s) candidato(s) do Passo 7 (`companies`, filtro `domain EQ {dominio}`). Empresas homônimas são reais nesta conta (ex.: existem 3 Companies chamadas "Arizona" com domínios diferentes); é por isso que a busca é sempre por domínio, nunca por nome, quando há domínio disponível.
+   - **Domínio do e-mail não bate com o domínio cadastrado na Company** (validado com um caso real: a Promon usa e-mails `@promon.com.br`, mas a Company no HubSpot está cadastrada com domínio `promonengenharia.com.br`): se a busca por domínio vier vazia, não desista, tente buscar por nome (`query`, usando a parte reconhecível do domínio ou do título do evento como termo, ex.: "Promon"). Se vier exatamente um resultado plausível, siga com ele. Se vier mais de um, sinalize a ambiguidade em vez de escolher sozinho.
    - Sem domínio disponível (fallback do Passo 7, caso Pré-Kickoff) → buscar Company por nome (`query: {nome}`). Se vier mais de um resultado, não escolher sozinho: sinalizar a ambiguidade.
-   - Nenhum resultado → não inventar Company; tratar como caso a resolver manualmente.
+   - Nenhum resultado por domínio nem por nome → não inventar Company; tratar como caso a resolver manualmente.
 2. **Buscar negócios abertos** associados a essa Company: `deals`, `filterGroups: [{filters: [{pipeline IN [default, 8582978]}, {hs_is_closed EQ false}], associatedWith: [{companies EQUAL [companyId]}]}]`. Usar a propriedade padrão `hs_is_closed` (True/False, mantida automaticamente pelo HubSpot para qualquer pipeline) em vez de listar manualmente quais dealstages contam como "fechado" por pipeline; é mais robusto.
    - 0 negócios abertos → a nota será associada **somente à Company** (fallback da seção 10 da spec original).
    - 1+ negócios abertos → associar a Company e **todos** os negócios abertos encontrados.
@@ -112,7 +113,13 @@ Registrado em: empresa [nome] + negócio(s) [nome(s)]
 
 ## Validado ponta a ponta (21/07/2026)
 
-Reunião real "Pipo Saúde + Cordeiro Guindastes" (16/07/2026): classificada como Diagnóstico, resumida, empresa e negócio identificados no HubSpot (resolvendo uma ambiguidade real de domínio pelo histórico de negócio), nota criada e associada, mensagem enviada em `#reunioes-vendas`. A transcrição foi obtida via link fornecido manualmente nesse teste; a busca automática por título no Drive (Passo 5) foi validada separadamente contra o arquivo real e encontrou o documento correto.
+Três reuniões reais processadas de ponta a ponta (transcrição, cérebro, HubSpot, Slack):
+
+- **Pipo Saúde + Cordeiro Guindastes** (16/07/2026, Diagnóstico): empresa e negócio identificados resolvendo uma ambiguidade real de domínio pelo histórico de negócio.
+- **Pipo Saúde + Promon | Consultoria de Benefícios** (15/07/2026, Briefing de Consultoria de Benefícios): domínio do e-mail (`promon.com.br`) não batia com o domínio cadastrado na Company (`promonengenharia.com.br`); resolvido por busca de nome (Passo 8).
+- **Pipo Saúde + DOT | Kickoff** (17/07/2026, Kickoff): Company com 36 negócios no histórico, mas 0 abertos nos pipelines comerciais (todos fechados ou em outro pipeline como Apólices); nota associada só à Company, confirmando que esse fallback é o comportamento normal, não um erro, para clientes já implantados.
+
+Em todos os três casos a transcrição foi localizada automaticamente no Drive por título (Passo 5, busca por `title contains`), sem link fornecido manualmente.
 
 ## Setup: Routines (execução agendada)
 
