@@ -1,0 +1,20 @@
+# Lista de donos (organizadores) elegíveis para a automação de resumos.
+# Editar esta lista ao adicionar/remover alguém do time. Não requer nenhuma mudança de lógica.
+time_vendas:
+  - marcelo.silva@piposaude.com.br
+  - aline.furlaneto@piposaude.com.br
+  - breno.hauss@piposaude.com.br
+  - erika.silva@piposaude.com.br
+  - luciano.moreira@piposaude.com.br
+  - rafael.falcao@piposaude.com.br
+  - larissa.martins@piposaude.com.br
+  - barbara.borges@piposaude.com.br
+
+# Domínios tratados como internos da Pipo (participante nesses domínios NÃO conta
+# como "participante externo" na regra de qualificação). @pipo.ai foi adicionado
+# porque algumas pessoas do time recebem convites com esse domínio em vez de
+# @piposaude.com.br (confirmado em reuniões internas reais, ex.: erika.silva@pipo.ai
+# nos Forecasts, mesma pessoa que erika.silva@piposaude.com.br).
+dominios_internos:
+  - piposaude.com.br
+  - pipo.ai
