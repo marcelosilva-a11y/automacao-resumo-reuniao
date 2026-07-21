@@ -24,7 +24,11 @@ O documento original definia janelas exatas (12h30 processa a manhã de hoje + d
 
 ## Passo 2: Filtro mestre
 
-Um evento só é candidato a processamento se o **organizador (dono)** do evento estiver na lista de `config/time-vendas.yaml`. Se o organizador for outra pessoa (ex.: o cliente organizou a reunião), **não processar automaticamente**: esse é exatamente o caso de uso do modo manual (skill `resumo-reuniao` usada diretamente por alguém colando a transcrição).
+Um evento só é candidato a processamento se o **organizador (dono) do evento for a mesma pessoa dona desta rotina** (não apenas alguém do time de vendas em geral).
+
+**Atenção, bug real encontrado e corrigido (21/07/2026):** a versão anterior desta regra checava só "o organizador está na lista de `config/time-vendas.yaml`", sem comparar com quem é o dono da rotina. Isso deixava passar reuniões onde o dono da rotina é apenas convidado, mas o organizador é outra pessoa do time (ex.: a rotina do Marcelo processando uma reunião organizada pela Larissa, só porque ele também foi convidado). Isso quebra a autoria correta (a nota/mensagem saem em nome de quem está rodando a rotina, não de quem é realmente dono da reunião) e, quando a outra pessoa também tiver rotina própria, geraria processamento redundante da mesma reunião por duas rotinas diferentes.
+
+Se o organizador não for o dono da rotina (seja porque é outra pessoa do time, seja porque é o cliente), **não processar automaticamente**: no caso de outra pessoa do time, a reunião é dela processar pela própria rotina; no caso do cliente ser organizador, é exatamente o caso de uso do modo manual (skill `resumo-reuniao` usada diretamente por alguém colando a transcrição).
 
 ## Passo 3: Regra de qualificação
 
@@ -46,7 +50,9 @@ Antes de fazer qualquer outro trabalho (evita gastar tempo com transcrição e c
 
 ## Passo 5: Localizar a transcrição no Drive
 
-O Gemini nomeia o arquivo de notas/transcrição assim (confirmado com um arquivo real): `{Título do evento} - AAAA/MM/DD HH:MM GMT-03:00 - Anotações do Gemini`.
+**Primeiro, checar o próprio evento do Calendar.** Em alguns casos (confirmado com um evento real de hoje) o Gemini já anexa o documento de notas direto no campo `attachments` do evento, com título "Anotações do Gemini" e um `fileUrl` do Google Docs. Se o evento já tiver esse anexo, use-o diretamente; é mais direto e confiável do que buscar no Drive.
+
+Se o evento não tiver esse anexo (caso mais comum nos testes até agora, ex.: Cordeiro Guindastes, Promon, DOT), busque no Drive. O Gemini nomeia o arquivo de notas/transcrição assim (confirmado com arquivos reais): `{Título do evento} - AAAA/MM/DD HH:MM GMT-03:00 - Anotações do Gemini`.
 
 Buscar no Drive (`search_files`) um Google Doc cujo título contenha uma parte distintiva do título do evento **e** "Anotações do Gemini" (ex.: `title contains 'Cordeiro' and title contains 'Gemini'`). Se vier mais de um resultado, desambiguar pela data/hora embutida no título do arquivo, comparando com a data/hora do evento.
 
