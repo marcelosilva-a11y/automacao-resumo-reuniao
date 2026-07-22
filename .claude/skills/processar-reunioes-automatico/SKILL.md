@@ -1,11 +1,11 @@
 ---
 name: processar-reunioes-automatico
-description: Fluxo automático de ponta a ponta que varre o Google Calendar de uma pessoa do time de vendas da Pipo, filtra reuniões qualificadas (cliente ou Pré-Kickoff), busca a transcrição no Drive, chama a skill resumo-reuniao para classificar e resumir, registra a observação no HubSpot e notifica o Slack. Rodada por uma Routine agendada (2x/dia, por pessoa).
+description: Fluxo automático de ponta a ponta que varre o Google Calendar de uma pessoa do time de vendas da Pipo, filtra reuniões qualificadas (cliente ou Pré-Kickoff), busca a transcrição no Drive, chama a skill resumo-reuniao para classificar e resumir, registra a observação no HubSpot e notifica o Slack. Rodada por uma scheduled task agendada (1x/dia, por pessoa).
 ---
 
 # Processar Reuniões (fluxo automático)
 
-Status: completo. Todas as fases (filtro mestre, qualificação, dedup, transcrição, cérebro, HubSpot, Slack) implementadas e testadas com dados e reuniões reais em 21/07/2026. Falta só o setup real das Routines nas contas das 8 pessoas (ver "Setup" no fim deste arquivo).
+Status: completo. Todas as fases (filtro mestre, qualificação, dedup, transcrição, cérebro, HubSpot, Slack) implementadas e testadas com dados e reuniões reais em 21-22/07/2026. Falta só o setup real das scheduled tasks nas contas das 8 pessoas (ver "Setup" no fim deste arquivo).
 
 **Pipelines comerciais confirmados nesta conta HubSpot** (não existe pipeline chamado literalmente "Vendas"; o time confirmou que "Vendas" era só um jeito informal de falar de "Oportunidades"):
 - `default` = Oportunidades
@@ -13,14 +13,17 @@ Status: completo. Todas as fases (filtro mestre, qualificação, dedup, transcri
 
 ## Entradas
 
-- Routine roda 2x/dia (12h30 e 18h15, horário de Brasília) para o dono da rotina.
+- Scheduled task roda 1x/dia (9h05, horário de Brasília) para o dono da rotina, cobrindo as reuniões do dia anterior.
 - `config/time-vendas.yaml` (lista do time de vendas elegível + domínios internos).
 
 ## Passo 1: Janela de tempo
 
-Listar os eventos do Calendar do dono da rotina nas últimas ~40 horas (janela generosa, não um corte exato de manhã/tarde).
+Listar os eventos do Calendar do dono da rotina cobrindo o dia anterior completo, com uma margem de segurança (aproximadamente as últimas 34-40 horas a partir da hora da rodada), não um corte exato de meia-noite a meia-noite.
 
-O documento original definia janelas exatas (12h30 processa a manhã de hoje + double-check da tarde de ontem; 18h15 processa a tarde de hoje + double-check da manhã de hoje) porque, sem dedup, era preciso acertar um recorte específico para não repetir nem perder reunião. Como o Passo 4 já garante dedup de verdade (por marcador na nota), uma janela larga e simples é mais robusta: cobre transcrição atrasada, rodada que falhou, etc., sem lógica extra de double-check. Os horários de execução continuam os do documento original (12h30 e 18h15 BRT).
+**Histórico de decisões sobre o agendamento:**
+- O documento original definia duas rodadas por dia (12h30 e 18h15) com janelas exatas de manhã/tarde e double-check cruzado, porque, sem dedup, era preciso acertar um recorte específico para não repetir nem perder reunião.
+- Com o Passo 4 garantindo dedup de verdade (por marcador na nota), uma janela larga e simples já ficou mais robusta que o double-check original (cobre transcrição atrasada, rodada que falhou, etc.).
+- Em 22/07/2026, o time decidiu simplificar ainda mais: **uma única rodada diária, às 9h05 (horário de Brasília)**, processando as reuniões do dia anterior, em vez de duas rodadas por dia. Motivo: com o dedup já garantindo que nada é processado duas vezes, rodar duas vezes por dia parou de agregar valor real; uma rodada pela manhã, depois que a transcrição do Gemini já teve a noite inteira para ficar pronta, é mais simples e cobre o mesmo território. A margem de segurança (~34-40h em vez de um corte exato de 24h) continua existindo para pegar qualquer transcrição que ainda não estivesse pronta na rodada anterior.
 
 ## Passo 2: Filtro mestre
 
@@ -99,7 +102,7 @@ Usa o objeto `notes`, criado com `manage_crm_objects` (`createRequest`):
 - **Marcador de dedup**: uma linha discreta (fonte pequena, cor cinza) no **fim** do corpo, depois de "Participantes da reunião": `<p style="font-size:11px;color:#999;margin-top:12px;">Ref. evento Calendar: {id}</p>`. Testado e confirmado: um comentário HTML (`<!-- ... -->`) **não funciona** aqui, porque o HubSpot indexa a busca a partir do texto visível da nota, que descarta comentários HTML. O marcador precisa ser texto real, mesmo que estilizado para ficar discreto.
 - **Associações**: sempre a Company; e cada negócio aberto identificado no Passo 8, se houver.
 
-Sobre confirmação: a ferramenta `manage_crm_objects` exige aprovação explícita (mostrar a mudança proposta e esperar confirmação) antes de criar qualquer registro. **Em qualquer teste manual, sempre mostrar a nota proposta (corpo + associações) e esperar aprovação explícita antes de criar de verdade.** No fluxo automático rodando via Routine agendada, sem humano no loop, a criação prossegue sem essa pausa interativa (mesmo comportamento já assumido para o Slack na seção 11 da spec: "envio automático, sem confirmação, é o comportamento desejado do fluxo agendado"). Isso só deve valer depois que o fluxo estiver validado em piloto real.
+Sobre confirmação: a ferramenta `manage_crm_objects` exige aprovação explícita (mostrar a mudança proposta e esperar confirmação) antes de criar qualquer registro. **Em qualquer teste manual, sempre mostrar a nota proposta (corpo + associações) e esperar aprovação explícita antes de criar de verdade.** No fluxo automático rodando via scheduled task agendada, sem humano no loop, a criação prossegue sem essa pausa interativa (mesmo comportamento já assumido para o Slack na seção 11 da spec: "envio automático, sem confirmação, é o comportamento desejado do fluxo agendado"). Isso só deve valer depois que o fluxo estiver validado em piloto real. Na prática (22/07/2026), isso exige duas coisas: (1) o prompt da scheduled task precisa dizer explicitamente que ela está autorizada a passar `confirmationStatus: CONFIRMED`; (2) as ferramentas `manage_crm_objects` e `slack_send_message` (e as de leitura mais usadas: `search_crm_objects`, `list_events`, `read_file_content`, `search_files`, `get_properties`, `list_scheduled_tasks`) precisam estar na allowlist de permissões do Claude Code (`.claude/settings.json` do projeto), senão a execução agendada trava pedindo aprovação sem ninguém para responder.
 
 ## Passo 10: Notificar o Slack
 
@@ -115,23 +118,27 @@ Registrado em: empresa [nome] + negócio(s) [nome(s)]
 🔗 [link da nota] [link da empresa] [link do(s) negócio(s)]
 ```
 
-**Nota sobre autoria em modo automático:** cada Routine roda com a conta Slack de quem é dono daquela reunião, então a mensagem sai postada pela própria pessoa mencionada (ela se menciona), o que é o comportamento esperado do fluxo agendado (seção 11: "cada pessoa posta com o próprio Slack").
+**Nota sobre autoria em modo automático:** cada scheduled task roda com a conta Slack de quem é dono daquela reunião, então a mensagem sai postada pela própria pessoa mencionada (ela se menciona), o que é o comportamento esperado do fluxo agendado (seção 11: "cada pessoa posta com o próprio Slack").
 
-## Validado ponta a ponta (21/07/2026)
+## Validado ponta a ponta (21-22/07/2026)
 
-Três reuniões reais processadas de ponta a ponta (transcrição, cérebro, HubSpot, Slack):
+Reuniões reais processadas de ponta a ponta (transcrição, cérebro, HubSpot, Slack), além de um backfill histórico de 34 reuniões (22 notas criadas, sem Slack) cobrindo 01/05 a 21/07:
 
 - **Pipo Saúde + Cordeiro Guindastes** (16/07/2026, Diagnóstico): empresa e negócio identificados resolvendo uma ambiguidade real de domínio pelo histórico de negócio.
 - **Pipo Saúde + Promon | Consultoria de Benefícios** (15/07/2026, Briefing de Consultoria de Benefícios): domínio do e-mail (`promon.com.br`) não batia com o domínio cadastrado na Company (`promonengenharia.com.br`); resolvido por busca de nome (Passo 8).
 - **Pipo Saúde + DOT | Kickoff** (17/07/2026, Kickoff): Company com 36 negócios no histórico, mas 0 abertos nos pipelines comerciais (todos fechados ou em outro pipeline como Apólices); nota associada só à Company, confirmando que esse fallback é o comportamento normal, não um erro, para clientes já implantados.
+- **Pipo Saúde + Conexa Saúde** (21/07/2026, Briefing de Consultoria de Benefícios): teste de ponta a ponta rodado manualmente (reunião organizada pela Larissa, processada excepcionalmente pela conta do Marcelo enquanto ela ainda não tinha rotina própria).
 
-Em todos os três casos a transcrição foi localizada automaticamente no Drive por título (Passo 5, busca por `title contains`), sem link fornecido manualmente.
+Em todos os casos a transcrição foi localizada automaticamente (anexo no próprio evento do Calendar ou busca no Drive por título, Passo 5), sem link fornecido manualmente.
 
-## Setup: Routines (execução agendada)
+**Descoberta real sobre a execução agendada em si (22/07/2026):** as duas primeiras execuções agendadas (antes desta seção existir) dispararam no horário certo mas não completaram nenhum trabalho, porque as ferramentas usadas (`manage_crm_objects`, `slack_send_message`, etc.) não estavam na allowlist de permissões do Claude Code, e sem humano presente para aprovar, a execução travava. Corrigido adicionando essas ferramentas ao `.claude/settings.json` do projeto (ver Passo 9). Recomendação: depois de criar ou alterar uma scheduled task, sempre rodar "Run now" uma vez para confirmar que ela completa sem travar em nenhum prompt de aprovação, antes de deixá-la rodando sozinha.
 
-- Cada uma das 8 pessoas do time de vendas cria **2 Routines** na própria conta Claude: uma às 12h30 e outra às 18h15 (horário de Brasília), cada uma invocando esta skill.
-- Cada Routine precisa dos conectores conectados com a **própria conta da pessoa**: Google Calendar, Google Drive, HubSpot, Slack. Isso preserva a privacidade (cada fluxo só acessa a própria agenda) e a autoria correta (nota e mensagem saem em nome de quem é dono da reunião), sem precisar gerenciar tokens brutos de API.
-- Ver `README.md` na raiz do repo para o passo a passo de conexão de contas e criação das Routines.
+## Setup: scheduled tasks (execução agendada)
+
+- Cada uma das 8 pessoas do time de vendas cria **1 scheduled task** na própria conta Claude, às 9h05 (horário de Brasília), invocando esta skill. Decisão de 22/07/2026: uma rodada diária (não mais duas) é suficiente, já que o dedup (Passo 4) garante que nada é processado duas vezes; rodar de manhã dá a noite inteira para a transcrição do Gemini ficar pronta.
+- Cada scheduled task precisa dos conectores conectados com a **própria conta da pessoa**: Google Calendar, Google Drive, HubSpot, Slack. Isso preserva a privacidade (cada fluxo só acessa a própria agenda) e a autoria correta (nota e mensagem saem em nome de quem é dono da reunião), sem precisar gerenciar tokens brutos de API.
+- As ferramentas usadas pela skill (leitura e escrita, listadas no Passo 9) precisam estar na allowlist de `.claude/settings.json` para a scheduled task não travar pedindo aprovação sem ninguém para responder.
+- Ver `README.md` na raiz do repo para o passo a passo de conexão de contas e criação da scheduled task.
 
 ## Limitações conhecidas
 

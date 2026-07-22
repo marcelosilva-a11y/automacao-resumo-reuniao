@@ -8,7 +8,9 @@ Baseado em `especificacao-automacao-resumos.md` (o documento original do time), 
 
 Diferente do documento original (que previa GitHub Actions com credenciais brutas por pessoa), esta automação roda via **scheduled tasks do Claude Code**, uma por pessoa, usando os mesmos conectores (Google Calendar, Google Drive, HubSpot, Slack) que cada pessoa já usa no dia a dia. Vantagens: nenhuma credencial bruta de API para gerenciar, autoria correta automática (cada rotina roda com a conta de quem é dona da reunião).
 
-**Limitação importante:** scheduled tasks do Claude Code rodam enquanto o app está aberto; se estiver fechado no horário marcado, a tarefa roda no próximo lançamento do app, não exatamente às 12h30/18h15. Isso é diferente de uma execução 100% desatendida na nuvem (como seria com GitHub Actions). Na prática, isso funciona bem se cada pessoa mantém o Claude Code aberto no horário comercial, mas é bom o time saber disso, para não estranhar se uma rodada atrasar em um dia em que o app ficou fechado.
+**Limitação importante:** scheduled tasks do Claude Code rodam enquanto o app está aberto; se estiver fechado no horário marcado, a tarefa roda no próximo lançamento do app, não exatamente às 9h05. Isso é diferente de uma execução 100% desatendida na nuvem (como seria com GitHub Actions). Na prática, isso funciona bem se cada pessoa mantém o Claude Code aberto de manhã, mas é bom o time saber disso, para não estranhar se uma rodada atrasar em um dia em que o app ficou fechado.
+
+**Outra pegadinha real (encontrada em 22/07/2026):** a primeira execução de uma scheduled task pode travar pedindo aprovação de ferramenta (Calendar/Drive/HubSpot/Slack), mesmo com tudo conectado. Sem ninguém para responder, ela simplesmente não completa nenhum trabalho (dispara no horário, mas não cria nota nem manda mensagem, silenciosamente). É essencial adicionar as ferramentas usadas pela automação à allowlist de permissões (`.claude/settings.json` do projeto) antes de deixar a scheduled task rodando sozinha, e testar com "Run now" pelo menos uma vez para confirmar que ela completa sem travar.
 
 ## Estrutura do repositório
 
@@ -41,11 +43,10 @@ Cada pessoa faz isso na própria conta do Claude Code:
 
 1. **Conectar as contas**: Google Calendar, Google Drive, HubSpot e Slack, todos com a própria conta corporativa da pessoa (não uma conta central).
 2. **Clonar/abrir este repositório** no Claude Code, para que as skills (`resumo-reuniao` e `processar-reunioes-automatico`) fiquem disponíveis.
-3. **Criar duas scheduled tasks** (uma para cada horário do documento original):
-   - **12h30** (horário de Brasília): prompt = "Use a skill processar-reunioes-automatico para varrer minhas reuniões recentes."
-   - **18h15** (horário de Brasília): mesmo prompt.
-   - Não é necessário diferenciar o prompt entre as duas rodadas: a janela de tempo e o dedup já cuidam de processar cada reunião qualificada exatamente uma vez, então rodar o mesmo prompt duas vezes por dia funciona sem duplicar nem perder nada.
-4. **Manter o Claude Code aberto** perto desses horários (ver limitação na seção Arquitetura).
+3. **Criar uma scheduled task, às 9h05** (horário de Brasília): prompt = "Use a skill processar-reunioes-automatico para varrer as reuniões do dia anterior." Uma rodada diária é suficiente (decisão de 22/07/2026): o dedup já garante que nada é processado duas vezes, e rodar de manhã dá a noite inteira para a transcrição do Gemini ficar pronta.
+4. **Adicionar as ferramentas da automação à allowlist de permissões** (`.claude/settings.json` do projeto): `search_crm_objects`, `manage_crm_objects`, `get_properties` (HubSpot), `list_events`, `get_event` (Calendar), `read_file_content`, `search_files`, `get_file_metadata` (Drive), `slack_send_message`, `slack_search_users` (Slack), `list_scheduled_tasks`. Sem isso, a scheduled task trava pedindo aprovação sem ninguém para responder.
+5. **Rodar "Run now" pelo menos uma vez** para confirmar que a tarefa completa sem travar em nenhum prompt de aprovação, antes de deixá-la rodando sozinha.
+6. **Manter o Claude Code aberto** perto das 9h05 (ver limitação na seção Arquitetura).
 
 ## Manutenção
 
